@@ -15,6 +15,7 @@ Pods/
 .AppleDouble
 .LSOverride
 
+
 # Icon must end with two \r
 Icon
 
@@ -136,6 +137,10 @@ iOSInjectionProject/
 !*.xcodeproj/xcshareddata/
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
+
+## Python ##
+*.pyc
+__pycache__/
 
 # End of https://www.toptal.com/developers/gitignore/api/swift,xcode,macos,cocoapods
  
