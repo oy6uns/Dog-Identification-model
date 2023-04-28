@@ -22,7 +22,7 @@ from PIL import Image
 # init app
 app = FastAPI()
 
-@app.post("/predict")
+@app.post("/predict", status_code=201)
 async def predict(file: UploadFile = File(...)):
     # file_ext = file.filename.split(".").pop() # jpeg, png등 확장자 무시
     # file_name = "test picture"
@@ -34,7 +34,7 @@ async def predict(file: UploadFile = File(...)):
     breed_num = await convert_image_to_tensor(file)
     breed_labels = swap_dict(labels)
     breed = breed_labels[breed_num]
-    return {"success": True, "message":"File uploaded successfully", "breed": breed}
+    return {"statusCode": 201, "success": True, "message":"File uploaded successfully", "breed": breed}
 
 model = torch.load('resnet50_fintuned_epoch50_v1.pt', map_location=torch.device('cpu'))
 
