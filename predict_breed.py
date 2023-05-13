@@ -18,9 +18,23 @@ from torch.utils.data import DataLoader, Dataset
 import torchvision.datasets as dataset
 from torchvision import models
 from PIL import Image
+from fastapi.middleware.cors import CORSMiddleware
 
 # init app
 app = FastAPI()
+
+origins = [
+    "http://localhost",
+    "http://localhost:8080",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/predict", status_code=201)
 async def predict(file: UploadFile = File(...)):
