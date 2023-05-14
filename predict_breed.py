@@ -1,24 +1,17 @@
 import uvicorn
-from fastapi import FastAPI
-from fastapi import FastAPI, UploadFile, File
-
 import torch
-import torchvision
 import torchvision.transforms as transforms
 from torch.autograd import Variable
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import os
 import io
-import numpy as np # linear algebra
-import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
-# necessary imports to be able to load the datasets
-from torch.utils.data import DataLoader, Dataset
-import torchvision.datasets as dataset
-from torchvision import models
+import pandas as pd 
 from PIL import Image
 from fastapi.middleware.cors import CORSMiddleware
+
+from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
+# for dog icon model
+import boto3
 
 # init app
 app = FastAPI()
@@ -48,6 +41,7 @@ async def predict(file: UploadFile = File(...)):
     breed_num = await convert_image_to_tensor(file)
     breed_labels = swap_dict(labels)
     breed = breed_labels[breed_num]
+    print("breed: ", breed)
     return {"statusCode": 201, "success": True, "message":"File uploaded successfully", "breed": breed}
 
 model = torch.load('resnet50_fintuned_epoch50_v1.pt', map_location=torch.device('cpu'))
@@ -79,14 +73,24 @@ async def convert_image_to_tensor(upload_file):
 
     input = Variable(tensor_image)
     output = model(input)
-    print(output)
     _, preds = torch.max(output.data, 1)
 
     return preds.item()
 
-@app.get("/test")
-async def root():
-    return {"message" : "this is test"}
+@app.post("/icon")
+async def get_images_from_s3(texts: list[str]):
+    s3 = boto3.client('s3')
+
+    def generate_images():
+        for text in texts:
+            try:
+                response = s3.get_object(Bucket='dog-icon-component-bucket', Key=f'{text}.png')
+                yield response['Body'].read()
+            except s3.exceptions.NoSuchKey:
+                raise HTTPException(status_code=404, detail=f"No image found for text: {text}")
+
+    return StreamingResponse(generate_images(), media_type="image/png")
+
 
 
 if __name__ == '__main__':
