@@ -78,29 +78,37 @@ async def convert_image_to_tensor(upload_file):
 
 @app.post("/icon")
 async def get_images_from_s3(texts: list[str]):
+    #AWS S3 스토리지에 접근
     s3 = boto3.client('s3')
 
+    # image를 S3버킷으로부터 불러오는 함수
     def generate_images():
         images = []
+        # request body의 배열의 원소와 파일명이 동일한 이미지를 S3버킷으로부터 불러온다. 
         for text in texts:
             try:
                 response = s3.get_object(Bucket='dog-icon-component-bucket', Key=f'{text}.png')
                 image_data = response['Body'].read()
+                # byte형태를 image형으로 변환해준다. 
                 image = Image.open(io.BytesIO(image_data))
                 images.append(image)
+            # 찾고자 하는 이미지가 S3버킷에 존재하지 않을 때, 에러메시지 출력
             except s3.exceptions.NoSuchKey:
                 raise HTTPException(status_code=404, detail=f"No image found for text: {text}")
         return images
     
     images = generate_images()
 
+    # 실제로 불러온 이미지 개수와 request body에서 전달한 텍스트의 개수가 다를 때 에러메시지 출력
     if len(images) < len(texts):
         raise HTTPException(status_code=500, detail="Some images could not be retrieved.")
 
+    # images 배열의 각 이미지를 순서대로 새로운 배열에 저장해준다. 
     ear_image = images[0]
     fur_image = images[1]
     pattern_image = images[2]
 
+    # ear(귀)의 위치를 지정해주기 위한 함수
     def make_ear_position(ear_image, fur_image):
         ear_x1 = int((fur_image.size[0] - ear_image.size[0]) / 2)
         ear_x2 = fur_image.size[0] - ear_x1
@@ -110,6 +118,7 @@ async def get_images_from_s3(texts: list[str]):
         area = (ear_x1, ear_y1, ear_x2, ear_y2)
         return area
 
+    # pattern(무늬)의 위치를 지정해주기 위한 함수
     def make_pattern_position(pattern_image, fur_image):
         x1 = int((fur_image.size[0] - pattern_image.size[0]) / 2)
         x2 = pattern_image.size[0] + x1
@@ -119,6 +128,7 @@ async def get_images_from_s3(texts: list[str]):
         area = (x1, y1, x2, y2)
         return area
 
+    # 배경색을 제거해주기 위한 함수
     def make_color_transparent(image, target_color):
         # 이미지에 알파 채널(투명도) 추가
         image = image.convert("RGBA")
@@ -146,6 +156,7 @@ async def get_images_from_s3(texts: list[str]):
     area_pattern = make_pattern_position(pattern_image, fur_image)
     print(area_pattern)
 
+    # 귀 이미지와 패턴 이미지를 알맞은 위치에 삽입해주는 함수
     fur_image.paste(ear_image, area_ear, mask=ear_image)
     fur_image.paste(pattern_image, area_pattern, mask=pattern_image)
 
