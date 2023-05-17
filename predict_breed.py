@@ -52,9 +52,10 @@ fur_model = torch.load('fur_resnet50.pth', map_location=torch.device('cpu'))
 dot_model = torch.load('dot_resnet50.pth', map_location=torch.device('cpu'))
 
 # detection model로 부터 얻은 index 값으로부터 동일한 파일명을 S3로부터 불러온다. 
-ear = ['down', 'up']
-fur = ['fur', 'no_fur']
-pattern = ['no', 'ear_dot', 'many', 'pattern3', 'top']
+# 그러기 위해 각 detection feature의 종류를 배열에 저장해놓는다. 
+ear_type = ['down', 'up']
+fur_type = ['fur', 'no_fur']
+pattern_type = ['no', 'ear_dot', 'many', 'nose', 'pattern3']
 
 
 # need to get the ids from the sample_submission csv so we can match it up 
@@ -258,6 +259,135 @@ async def get_images_from_s3(texts: list[str]):
 
     return StreamingResponse(image_bytes, media_type="image/png")
 
+@app.post("/final", status_code=201)
+async def makeIcon(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+    transform = transforms.Compose([
+                    transforms.RandomResizedCrop(size=300, scale=(0.8, 1.0)),
+                    transforms.CenterCrop(size=300),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.485, 0.456, 0.406],
+                                         [0.229, 0.224, 0.225])])
+    
+    b= transform(img)
+    tensor_image = torch.unsqueeze(b, 0)
+
+    input = Variable(tensor_image)
+    ear_output = ear_model(input)
+    fur_output = fur_model(input)
+    pattern_output = dot_model(input)
+
+    _, ear_preds = torch.max(ear_output.data, 1)
+    _, fur_preds = torch.max(fur_output.data, 1)
+    _, pattern_preds = torch.max(pattern_output.data, 1)
+
+    #AWS S3 스토리지에 접근
+    s3 = boto3.client('s3')
+    print(pattern_preds.item())
+    texts = ["250,250,250-" + ear_type[ear_preds.item()], "250,250,250-" + fur_type[fur_preds.item()], "200,200,200-" + pattern_type[pattern_preds.item()], "dog-face"]
+
+    # image를 S3버킷으로부터 불러오는 함수
+    def generate_images():
+        images = []
+        # request body의 배열의 원소와 파일명이 동일한 이미지를 S3버킷으로부터 불러온다. 
+        for text in texts:
+            try:
+                response = s3.get_object(Bucket='dog-icon-component-bucket', Key=f'{text}.png')
+                image_data = response['Body'].read()
+                # byte형태를 image형으로 변환해준다. 
+                image = Image.open(io.BytesIO(image_data))
+                images.append(image)
+            # 찾고자 하는 이미지가 S3버킷에 존재하지 않을 때, 에러메시지 출력
+            except s3.exceptions.NoSuchKey:
+                raise HTTPException(status_code=404, detail=f"No image found for text: {text}")
+        return images
+    
+    images = generate_images()
+
+    # 실제로 불러온 이미지 개수와 request body에서 전달한 텍스트의 개수가 다를 때 에러메시지 출력
+    if len(images) < len(texts):
+        raise HTTPException(status_code=500, detail="Some images could not be retrieved.")
+
+    # images 배열의 각 이미지를 순서대로 새로운 배열에 저장해준다. 
+    ear_image = images[0]
+    fur_image = images[1]
+    if fur_preds.item() == 1:
+        fur_image = fur_image.resize((300, 300))
+    pattern_image = images[2]
+    pattern_image = pattern_image.resize((220, 180))
+    face_image = images[3]
+
+    # ear(귀)의 위치를 지정해주기 위한 함수
+    def make_ear_position(ear_image, fur_image):
+        ear_x1 = int((fur_image.size[0] - ear_image.size[0]) / 2)
+        ear_x2 = ear_image.size[0] + ear_x1
+        ear_y1 = 80
+        ear_y2 = ear_y1 + ear_image.size[1]
+
+        area = (ear_x1, ear_y1, ear_x2, ear_y2)
+        return area
+
+    # pattern(무늬)의 위치를 지정해주기 위한 함수
+    def make_pattern_position(pattern_image, fur_image):
+        x1 = int((fur_image.size[0] - pattern_image.size[0]) / 2)
+        x2 = pattern_image.size[0] + x1
+        y1 = int((fur_image.size[1] - pattern_image.size[1]) / 2)
+        y2 = pattern_image.size[1] + y1
+
+        area = (x1, y1, x2, y2)
+        return area
+    
+    def make_face_position(face_image, fur_image):
+        x1 = int((fur_image.size[0] - face_image.size[0]) / 2)
+        x2 = x1 + face_image.size[0]
+        y1 = 220
+        y2 = y1 + face_image.size[1]
+
+        area = (x1, y1, x2, y2)
+        return area
+
+    # 배경색을 제거해주기 위한 함수
+    def make_color_transparent(image, target_color):
+        # 이미지에 알파 채널(투명도) 추가
+        image = image.convert("RGBA")
+
+        # 이미지의 픽셀 데이터 가져오기
+        data = image.getdata()
+
+        # 새로운 픽셀 데이터 생성
+        new_data = []
+        for item in data:
+            # 대상 색상과 일치하는 경우 알파 값을 0으로 설정하여 투명하게 만듦
+            if item[:3] == target_color:
+                new_data.append((*target_color, 0))
+            else:
+               new_data.append(item)
+
+        # 이미지에 새로운 픽셀 데이터 적용
+        image.putdata(new_data)
+
+    # 대상 이외의 배경을 제거하는 함수
+    make_color_transparent(ear_image, (255, 255, 255))
+    make_color_transparent(pattern_image, (255, 255, 255))
+    make_color_transparent(face_image, (255, 255, 255))
+
+    area_ear = make_ear_position(ear_image, fur_image)
+    area_pattern = make_pattern_position(pattern_image, fur_image)
+    area_face = make_face_position(face_image, fur_image)
+
+    # 귀 이미지와 패턴 이미지를 알맞은 위치에 삽입해주는 함수
+    fur_image.paste(ear_image, area_ear, mask=ear_image)
+    if pattern_preds.item() != 0:
+        fur_image.paste(pattern_image, area_pattern, mask=pattern_image)
+    # 패턴이 존재할 때만 패턴을 사진에 추가한다
+    fur_image.paste(face_image, area_face, mask=face_image)
+
+    image_bytes = io.BytesIO()
+    fur_image.save(image_bytes, format='PNG')
+    image_bytes.seek(0)
+
+    return StreamingResponse(image_bytes, media_type="image/png")
 
 if __name__ == '__main__':
     uvicorn.run(app, host="127.0.0.1", port = 8000)
