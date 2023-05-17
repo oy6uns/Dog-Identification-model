@@ -13,9 +13,21 @@ from fastapi.responses import StreamingResponse
 # for dog icon model
 import boto3
 
+# for dog color model
+# import dlib
+import cv2
+import numpy as np
+from imutils import face_utils
+from sklearn.cluster import KMeans
+
+# for dog detection model
+import os
+
+
 # init app
 app = FastAPI()
 
+'''Web CORS 관련 문제 해결 코드'''
 origins = [
     "http://localhost",
     "http://localhost:8080",
@@ -29,22 +41,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/predict", status_code=201)
-async def predict(file: UploadFile = File(...)):
-    # file_ext = file.filename.split(".").pop() # jpeg, png등 확장자 무시
-    # file_name = "test picture"
-    # file_path = f"{file_name}.{file_ext}"
-    # run_model("test picture.jpg")
-    # with open(file_path, "wb") as f:
-    #     content = await file.read()
-    #     f.write(content)
-    breed_num = await convert_image_to_tensor(file)
-    breed_labels = swap_dict(labels)
-    breed = breed_labels[breed_num]
-    print("breed: ", breed)
-    return {"statusCode": 201, "success": True, "message":"File uploaded successfully", "breed": breed}
+'''강아지 종 분류 관련 코드'''
+breed_model = torch.load('resnet50_fintuned_epoch50_v1.pt', map_location=torch.device('cpu'))
 
-model = torch.load('resnet50_fintuned_epoch50_v1.pt', map_location=torch.device('cpu'))
+'''강아지의 색상 추출해주는 함수 코드'''
+
+'''강아지 face detection'''
+ear_model = torch.load('ear_resnet50.pth', map_location=torch.device('cpu'))
+fur_model = torch.load('fur_resnet50.pth', map_location=torch.device('cpu'))
+dot_model = torch.load('dot_resnet50.pth', map_location=torch.device('cpu'))
+
+ear = []
 
 # need to get the ids from the sample_submission csv so we can match it up 
 labels = dict()
@@ -55,7 +62,28 @@ print(labels)
 def swap_dict(d):
     return {v: k for k, v in d.items()}
 
-async def convert_image_to_tensor(upload_file):
+# ear, fur, pattern detect를 위한 image-to-tensor 코드
+async def convert_image_to_tensor_detect(upload_file, model):
+    image_bytes = await upload_file.read()
+    dataBytesIO = io.BytesIO(image_bytes)
+
+    img = Image.open(dataBytesIO).convert('RGB')
+    transform = transforms.Compose([
+                    transforms.RandomResizedCrop(size=300, scale=(0.8, 1.0)),
+                    transforms.CenterCrop(size=300),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.485, 0.456, 0.406],
+                                         [0.229, 0.224, 0.225])])
+    
+    b= transform(img)
+    tensor_image = torch.unsqueeze(b, 0)
+
+    input = Variable(tensor_image)
+    output = model(input)
+    return output
+
+# breed identification을 위한 image-to-tensor 코드
+async def convert_image_to_tensor_breed(upload_file, model):
     image_bytes = await upload_file.read()
     img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
     transform = transforms.Compose([
@@ -72,11 +100,58 @@ async def convert_image_to_tensor(upload_file):
 
     input = Variable(tensor_image)
     output = model(input)
-    _, preds = torch.max(output.data, 1)
+    return output
 
-    return preds.item()
+@app.post("/predict", status_code=201)
+async def predict(file: UploadFile = File(...)):
+    # file_ext = file.filename.split(".").pop() # jpeg, png등 확장자 무시
+    # file_name = "test picture"
+    # file_path = f"{file_name}.{file_ext}"
+    # run_model("test picture.jpg")
+    # with open(file_path, "wb") as f:
+    #     content = await file.read()
+    #     f.write(content)
+    tensorImage = await convert_image_to_tensor_breed(file, breed_model)
+    _, preds = torch.max(tensorImage.data, 1)
+    breed_num = preds.item()
+    breed_labels = swap_dict(labels)
+    breed = breed_labels[breed_num]
+    print("breed: ", breed)
+    return {"statusCode": 201, "success": True, "message":"File uploaded successfully", "breed": breed}
 
-@app.post("/icon")
+@app.post("/face", status_code=201)
+async def detectFace(file: UploadFile = File(...)):
+    # file_ext = file.filename.split(".").pop() # jpeg, png등 확장자 무시
+    # file_name = "test picture"
+    # file_path = f"{file_name}.{file_ext}"
+    # run_model("test picture.jpg")
+    # with open(file_path, "wb") as f:
+    #     content = await file.read()
+    #     f.write(content)
+    image_bytes = await file.read()
+    img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+    transform = transforms.Compose([
+                    transforms.RandomResizedCrop(size=300, scale=(0.8, 1.0)),
+                    transforms.CenterCrop(size=300),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.485, 0.456, 0.406],
+                                         [0.229, 0.224, 0.225])])
+    
+    b= transform(img)
+    tensor_image = torch.unsqueeze(b, 0)
+
+    input = Variable(tensor_image)
+    ear_output = ear_model(input)
+    fur_output = fur_model(input)
+    pattern_output = dot_model(input)
+
+    _, ear_preds = torch.max(ear_output.data, 1)
+    _, fur_preds = torch.max(fur_output.data, 1)
+    _, pattern_preds = torch.max(pattern_output.data, 1)
+
+    return ear_preds.item(), fur_preds.item(), pattern_preds.item()
+
+@app.post("/icon", status_code=201)
 async def get_images_from_s3(texts: list[str]):
     #AWS S3 스토리지에 접근
     s3 = boto3.client('s3')
@@ -165,6 +240,7 @@ async def get_images_from_s3(texts: list[str]):
     image_bytes.seek(0)
 
     return StreamingResponse(image_bytes, media_type="image/png")
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host="127.0.0.1", port = 8000)
