@@ -51,7 +51,11 @@ ear_model = torch.load('ear_resnet50.pth', map_location=torch.device('cpu'))
 fur_model = torch.load('fur_resnet50.pth', map_location=torch.device('cpu'))
 dot_model = torch.load('dot_resnet50.pth', map_location=torch.device('cpu'))
 
-ear = []
+# detection model로 부터 얻은 index 값으로부터 동일한 파일명을 S3로부터 불러온다. 
+ear = ['down', 'up']
+fur = ['fur', 'no_fur']
+pattern = ['no', 'ear_dot', 'many', 'pattern3', 'top']
+
 
 # need to get the ids from the sample_submission csv so we can match it up 
 labels = dict()
@@ -182,6 +186,8 @@ async def get_images_from_s3(texts: list[str]):
     ear_image = images[0]
     fur_image = images[1]
     pattern_image = images[2]
+    pattern_image = pattern_image.resize((220, 180))
+    face_image = images[3]
 
     # ear(귀)의 위치를 지정해주기 위한 함수
     def make_ear_position(ear_image, fur_image):
@@ -199,6 +205,15 @@ async def get_images_from_s3(texts: list[str]):
         x2 = pattern_image.size[0] + x1
         y1 = int((fur_image.size[1] - pattern_image.size[1]) / 2)
         y2 = pattern_image.size[1] + y1
+
+        area = (x1, y1, x2, y2)
+        return area
+    
+    def make_face_position(face_image, fur_image):
+        x1 = int((fur_image.size[0] - face_image.size[0]) / 2)
+        x2 = x1 + face_image.size[0]
+        y1 = 220
+        y2 = y1 + face_image.size[1]
 
         area = (x1, y1, x2, y2)
         return area
@@ -226,14 +241,16 @@ async def get_images_from_s3(texts: list[str]):
     # 대상 이외의 배경을 제거하는 함수
     make_color_transparent(ear_image, (255, 255, 255))
     make_color_transparent(pattern_image, (255, 255, 255))
+    make_color_transparent(face_image, (255, 255, 255))
 
     area_ear = make_ear_position(ear_image, fur_image)
     area_pattern = make_pattern_position(pattern_image, fur_image)
-    print(area_pattern)
+    area_face = make_face_position(face_image, fur_image)
 
     # 귀 이미지와 패턴 이미지를 알맞은 위치에 삽입해주는 함수
     fur_image.paste(ear_image, area_ear, mask=ear_image)
     fur_image.paste(pattern_image, area_pattern, mask=pattern_image)
+    fur_image.paste(face_image, area_face, mask=face_image)
 
     image_bytes = io.BytesIO()
     fur_image.save(image_bytes, format='PNG')
