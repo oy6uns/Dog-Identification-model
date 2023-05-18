@@ -26,5 +26,10 @@ POST 요청으로 사진을 MultipartFormData에 담아 보내면 response로 �
 ["ear", "fur", "pattern"] 과 같이 받고자 하는 이미지 이름을 String 배열로 request body에 담아 POST 요청을 보내면, 
 AWS S3에서 배열의 원소와 동일한 파일 이름을 가지는 이미지를 탐색합니다. 
 이미지는 ver 23/05/11.에서 만든 아이콘 합성 모델을 거쳐 완성된 dog-icon으로써 response body에 담아 보내줍니다. 
-
 <img width="709" alt="스크린샷 2023-05-16 오후 1 44 45" src="https://github.com/oy6uns/Dog-Identification-model/assets/45239582/7636820b-3cab-42db-8eca-d21b03633a6c">
+
+### Ver 23/05/18.
+- ear, fur, pattern detection 모델을 추가했습니다. (pretrained model = resnet50)
+- 사진을 request body에 담아 POST 요청을 보내면, 각각 ear, fur, dot detection 모델을 돌린 뒤에 어떤 종류의 icon에 해당하는지를 detection 합니다. 
+- detection한 각 ear, fur, pattern의 종류를 바탕으로 S3 storage에서 그에 맞는 이미지를 찾아서 합성해서 resoponse body에 담아 보내줍니다. 
+<img width="736" alt="스크린샷 2023-05-18 오후 2 54 52" src="https://github.com/oy6uns/Dog-Identification-model/assets/45239582/485eea4f-f5f2-410d-a0a6-44959ce6818e">
