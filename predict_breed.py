@@ -15,14 +15,12 @@ import boto3
 
 # for dog color model
 # import dlib
-import cv2
-import numpy as np
-from imutils import face_utils
-from sklearn.cluster import KMeans
+# import cv2
+#import numpy as np
+# from imutils import face_utils
+# from sklearn.cluster import KMeans
 
 # for dog detection model
-import os
-
 
 # init app
 app = FastAPI()
