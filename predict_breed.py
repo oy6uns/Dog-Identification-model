@@ -307,39 +307,87 @@ async def makeIcon(file: UploadFile = File(...)):
     if len(images) < len(texts):
         raise HTTPException(status_code=500, detail="Some images could not be retrieved.")
 
+    # 배경에 깔 이미지를 하나 생성해준다. 
+    background_image = Image.new('RGBA', (600, 600), (0, 0, 0, 0))
+
     # images 배열의 각 이미지를 순서대로 새로운 배열에 저장해준다. 
     ear_image = images[0]
     fur_image = images[1]
     if fur_preds.item() == 1:
         fur_image = fur_image.resize((300, 300))
     pattern_image = images[2]
-    pattern_image = pattern_image.resize((220, 180))
     face_image = images[3]
 
+    # ear_type = ['down', 'up']
+    # fur_type = ['fur', 'no_fur']
+    # pattern_type = ['no', 'ear_dot', 'many', 'nose', 'pattern3']
+
     # ear(귀)의 위치를 지정해주기 위한 함수
-    def make_ear_position(ear_image, fur_image):
-        ear_x1 = int((fur_image.size[0] - ear_image.size[0]) / 2)
+    def make_ear_position(ear_preds, ear_image, background_image):
+        ear_x1 = int((background_image.size[0] - ear_image.size[0]) / 2)
         ear_x2 = ear_image.size[0] + ear_x1
-        ear_y1 = 80
+        if(ear_preds == 0):
+            ear_y1 = 160
+        else:
+            ear_y1 = 80
         ear_y2 = ear_y1 + ear_image.size[1]
 
         area = (ear_x1, ear_y1, ear_x2, ear_y2)
         return area
 
     # pattern(무늬)의 위치를 지정해주기 위한 함수
-    def make_pattern_position(pattern_image, fur_image):
-        x1 = int((fur_image.size[0] - pattern_image.size[0]) / 2)
-        x2 = pattern_image.size[0] + x1
-        y1 = int((fur_image.size[1] - pattern_image.size[1]) / 2)
-        y2 = pattern_image.size[1] + y1
+    def make_pattern_position(pattern_preds, pattern_image, background_image):
+        print(pattern_preds)
+        if pattern_preds == 1:
+            pattern_image = pattern_image.resize((250, 150))
+            x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
+            print(x1)
+            x2 = pattern_image.size[0] + x1
+            print(x2)
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) - 30
+            print(y1)
+            y2 = pattern_image.size[1] + y1
+            print(y2)
+        elif pattern_preds == 2:
+            pattern_image = pattern_image.resize((250, 220))
+            x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
+            x2 = pattern_image.size[0] + x1
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2)
+            y2 = pattern_image.size[1] + y1
+        elif pattern_preds == 3:
+            x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
+            x2 = pattern_image.size[0] + x1
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) + 55
+            y2 = pattern_image.size[1] + y1
+        elif pattern_preds == 4:
+            pattern_image = pattern_image.resize((315, 195))
+            x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
+            x2 = pattern_image.size[0] + x1
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) - 60
+            y2 = pattern_image.size[1] + y1
+        else:
+            x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
+            x2 = pattern_image.size[0] + x1
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2)
+            y2 = pattern_image.size[1] + y1
 
         area = (x1, y1, x2, y2)
         return area
     
-    def make_face_position(face_image, fur_image):
-        x1 = int((fur_image.size[0] - face_image.size[0]) / 2)
+    def make_fur_position(fur_image, background_image):
+    
+        x1 = int((background_image.size[0] - fur_image.size[0]) / 2)
+        x2 = fur_image.size[0] + x1
+        y1 = int((background_image.size[1] - fur_image.size[1]) / 2)
+        y2 = fur_image.size[1] + y1
+
+        area = (x1, y1, x2, y2)
+        return area
+    
+    def make_face_position(face_image, background_image):
+        x1 = int((background_image.size[0] - face_image.size[0]) / 2)
         x2 = x1 + face_image.size[0]
-        y1 = 220
+        y1 = 270
         y2 = y1 + face_image.size[1]
 
         area = (x1, y1, x2, y2)
@@ -367,22 +415,32 @@ async def makeIcon(file: UploadFile = File(...)):
 
     # 대상 이외의 배경을 제거하는 함수
     make_color_transparent(ear_image, (255, 255, 255))
+    make_color_transparent(fur_image, (255, 255, 255))
     make_color_transparent(pattern_image, (255, 255, 255))
     make_color_transparent(face_image, (255, 255, 255))
 
-    area_ear = make_ear_position(ear_image, fur_image)
-    area_pattern = make_pattern_position(pattern_image, fur_image)
-    area_face = make_face_position(face_image, fur_image)
+    area_ear = make_ear_position(ear_preds, ear_image, background_image)
+    area_pattern = make_pattern_position(pattern_preds, pattern_image, background_image)
+    print(area_pattern)
+    area_fur = make_fur_position(fur_image, background_image)
+    area_face = make_face_position(face_image, background_image)
 
-    # 귀 이미지와 패턴 이미지를 알맞은 위치에 삽입해주는 함수
-    fur_image.paste(ear_image, area_ear, mask=ear_image)
+    # 배경에 이미지를 겹쳐서 붙이기
+    background_image.paste(fur_image, area_fur, mask=fur_image)
     if pattern_preds.item() != 0:
-        fur_image.paste(pattern_image, area_pattern, mask=pattern_image)
-    # 패턴이 존재할 때만 패턴을 사진에 추가한다
-    fur_image.paste(face_image, area_face, mask=face_image)
+        if pattern_preds == 1:
+            pattern_image = pattern_image.resize((250, 150))
+        elif pattern_preds == 2:
+            pattern_image = pattern_image.resize((250, 220))
+        elif pattern_preds == 4:
+            pattern_image = pattern_image.resize((315, 195))
+        background_image.paste(pattern_image, area_pattern, mask=pattern_image)
+
+    background_image.paste(ear_image, area_ear, mask=ear_image)
+    background_image.paste(face_image, area_face, mask=face_image)
 
     image_bytes = io.BytesIO()
-    fur_image.save(image_bytes, format='PNG')
+    background_image.save(image_bytes, format='PNG')
     image_bytes.seek(0)
 
     return StreamingResponse(image_bytes, media_type="image/png")
