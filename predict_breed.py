@@ -113,14 +113,14 @@ predictor = dlib.shape_predictor('landmarkDetector.dat')
 async def predict_color(file: UploadFile = File(...)):
     image_bytes = await file.read()
     img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-    img = np.array(img)
-    dets = detector(img, upsample_num_times=1)
+    img_np = np.array(img)
+    dets = detector(img_np, upsample_num_times=1)
 
     for i, d in enumerate(dets):
         # 강아지 얼굴 영역 추출
         x1, y1 = d.rect.left(), d.rect.top()
         x2, y2 = d.rect.right(), d.rect.bottom()
-        face_img = img[y1:y2, x1:x2]
+        face_img = img_np[y1:y2, x1:x2]
 
         # RGB로 변환
         face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
@@ -154,10 +154,10 @@ async def predict_color(file: UploadFile = File(...)):
         for color, ratio in zip(RGB_colors, ratios):
             print(f"Color: {color.tolist()}, Ratio: {ratio:.2f}")
     
-    def defineColor(img):
+    def defineColor(img_np):
         detector = dlib.cnn_face_detection_model_v1('dogHeadDetector.dat')
 
-        yuv_img = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        yuv_img = cv2.cvtColor(img_np, cv2.COLOR_BGR2YUV)
         yuv_img[:,:,0] = cv2.equalizeHist(yuv_img[:,:,0])
         img_output = cv2.cvtColor(yuv_img, cv2.COLOR_YUV2BGR)
         dets = detector(img_output, upsample_num_times=1)
@@ -200,7 +200,7 @@ async def predict_color(file: UploadFile = File(...)):
 
         return colors[:2]
 
-    return defineColor(img)
+    return defineColor(img_np)
 
 
 
