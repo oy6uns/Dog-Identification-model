@@ -676,7 +676,9 @@ async def makeIcon_URL(file: UploadFile = File(...)):
                 images.append(image)
             # 찾고자 하는 이미지가 S3버킷에 존재하지 않을 때, 에러메시지 출력
             except s3.exceptions.NoSuchKey:
-                raise HTTPException(status_code=404, detail=f"No image found for text: {text}")
+                image = Image.new('RGBA', (600, 600), (0, 0, 0, 0))
+                images.append(image)
+                # raise HTTPException(status_code=404, detail=f"No image found for text: {text}")
         return images
     
     images = generate_images()
@@ -827,7 +829,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
 
     # Specify your bucket name and image key.
     bucket = 'dog-icon-component-bucket'
-    key = join_text_elements(texts)
+    key = join_text_elements(texts) + '.jpg'
     folder = "generated"
 
     # Upload the image to S3
