@@ -257,7 +257,8 @@ async def get_images_from_s3(texts: list[str]):
 
     return StreamingResponse(image_bytes, media_type="image/png")
 
-@app.post("/final", status_code=201)
+# final version respose with Image
+@app.post("/finalImg", status_code=201)
 async def makeIcon(file: UploadFile = File(...)):
     image_bytes = await file.read()
     img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
