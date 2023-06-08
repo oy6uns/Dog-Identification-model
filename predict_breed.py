@@ -14,13 +14,14 @@ from fastapi.responses import StreamingResponse
 import boto3
 
 # for dog color model
-# import dlib
-# import cv2
-#import numpy as np
-# from imutils import face_utils
-# from sklearn.cluster import KMeans
+import dlib
+import cv2
+import numpy as np
+from imutils import face_utils
+from sklearn.cluster import KMeans
 
 # for dog detection model
+
 
 # init app
 app = FastAPI()
@@ -103,7 +104,105 @@ async def convert_image_to_tensor_breed(upload_file, model):
 
     input = Variable(tensor_image)
     output = model(input)
-    return output
+    
+
+detector = dlib.cnn_face_detection_model_v1('dogHeadDetector.dat')
+predictor = dlib.shape_predictor('landmarkDetector.dat')
+
+@app.post("/color", status_code=201)
+async def predict_color(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+    img = np.array(img)
+    dets = detector(img, upsample_num_times=1)
+
+    for i, d in enumerate(dets):
+        # 강아지 얼굴 영역 추출
+        x1, y1 = d.rect.left(), d.rect.top()
+        x2, y2 = d.rect.right(), d.rect.bottom()
+        face_img = img[y1:y2, x1:x2]
+
+        # RGB로 변환
+        face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+
+        # 이미지를 2차원 배열로 변경
+        pixels = face_img.reshape(-1, 3)
+
+        # k-means 클러스터링을 사용하여 가장 일반적인 색상 구하기
+        kmeans = KMeans(n_clusters=5)
+        kmeans.fit(pixels)
+
+        # 각 픽셀의 레이블
+        labels = kmeans.labels_
+
+        # 중심점의 RGB 값
+        RGB_colors = kmeans.cluster_centers_
+
+        # RGB 값을 정수로 변환
+        RGB_colors = RGB_colors.round(0).astype(int)
+        
+        # RGB 값을 50 단위로 정규화
+        for i in range(len(RGB_colors)):
+            RGB_colors[i] = ((RGB_colors[i] + 25) // 50) * 50
+
+        # 각 dominant color의 비율 계산
+        labels, counts = np.unique(kmeans.labels_, return_counts=True)
+        ratios = counts / len(kmeans.labels_)
+
+        # RGB 색상과 해당 색상의 비율을 리스트로 출력
+        print('Two dominant colors and their ratios: ')
+        for color, ratio in zip(RGB_colors, ratios):
+            print(f"Color: {color.tolist()}, Ratio: {ratio:.2f}")
+    
+    def defineColor(img):
+        detector = dlib.cnn_face_detection_model_v1('dogHeadDetector.dat')
+
+        yuv_img = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        yuv_img[:,:,0] = cv2.equalizeHist(yuv_img[:,:,0])
+        img_output = cv2.cvtColor(yuv_img, cv2.COLOR_YUV2BGR)
+        dets = detector(img_output, upsample_num_times=1)
+
+        colors = []
+        for i, d in enumerate(dets):
+            # 얼굴 영역 추출
+            x1, y1 = d.rect.left(), d.rect.top()
+            x2, y2 = d.rect.right(), d.rect.bottom()
+
+            face_img = img_output[y1:y2, x1:x2]
+
+            # RGB로 변환
+            face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+
+            # 이미지를 2차원 배열로 변경
+            pixels = face_img.reshape(-1, 3)
+
+            # k-means 클러스터링을 사용하여 가장 일반적인 색상 구하기
+            kmeans = KMeans(n_clusters=5)
+            kmeans.fit(pixels)
+
+            # 중심점의 RGB 값
+            RGB_colors = kmeans.cluster_centers_
+
+            # RGB 값을 정수로 변환
+            RGB_colors = RGB_colors.round(0).astype(int)
+
+            # RGB 값을 50 단위로 정규화
+            for i in range(len(RGB_colors)):
+                RGB_colors[i] = ((RGB_colors[i] + 25) // 50) * 50
+
+            # 각 dominant color의 비율 계산
+            labels, counts = np.unique(kmeans.labels_, return_counts=True)
+            sorted_colors = sorted(zip(RGB_colors, counts), key=lambda x: x[1], reverse=True)
+            
+            # , 단위로 출력
+            for color, count in sorted_colors:
+                colors.append(','.join(map(str, color)))
+
+        return colors[:2]
+
+    return defineColor(img)
+
+
 
 @app.post("/predict", status_code=201)
 async def predict(file: UploadFile = File(...)):
