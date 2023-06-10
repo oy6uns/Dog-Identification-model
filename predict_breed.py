@@ -105,6 +105,8 @@ async def convert_image_to_tensor_breed(upload_file, model):
     input = Variable(tensor_image)
     output = model(input)
     
+    return output
+    
 
 detector = dlib.cnn_face_detection_model_v1('dogHeadDetector.dat')
 predictor = dlib.shape_predictor('landmarkDetector.dat')
@@ -201,8 +203,6 @@ async def predict_color(file: UploadFile = File(...)):
         return colors[:2]
 
     return defineColor(img_np)
-
-
 
 @app.post("/predict", status_code=201)
 async def predict(file: UploadFile = File(...)):
