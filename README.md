@@ -60,7 +60,7 @@ AWS S3에서 배열의 원소와 동일한 파일 이름을 가지는 이미지�
 
 ---
 
-### Ver 23/06/11.
+### Ver 23/06/08.
 > 아래와 같은 에러메시지를 발견했습니다. <br>
 xhr.js:247 Mixed Content: The page at 'https://dog-mbti.pages.dev/' was loaded over HTTPS, but requested an insecure XMLHttpRequest endpoint 'http://3.23.60.50:8000/final'. This request has been blocked; the content must be served over HTTPS.
 Web은 보안 문제로 인해 HTTP 엔트포인트와 통신하는데 있어서 위와 같은 오류가 발생했습니다. 따라서, 이를 조치해주기 위해 API URL을 HTTPS로 변경해주었습니다. 
