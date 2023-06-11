@@ -740,7 +740,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
             y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) + 55
             y2 = pattern_image.size[1] + y1
         elif pattern_preds == 4:
-            pattern_image = pattern_image.resize((315, 195))
+            pattern_image = pattern_image.resize((305, 195))
             x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
             x2 = pattern_image.size[0] + x1
             y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) - 60
@@ -813,7 +813,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
         elif pattern_preds == 2:
             pattern_image = pattern_image.resize((250, 220))
         elif pattern_preds == 4:
-            pattern_image = pattern_image.resize((315, 195))
+            pattern_image = pattern_image.resize((305, 195))
         background_image.paste(pattern_image, area_pattern, mask=pattern_image)
 
     background_image.paste(ear_image, area_ear, mask=ear_image)
@@ -833,7 +833,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     folder = "generated"
 
     # Upload the image to S3
-    s3.put_object(Bucket=bucket, Key=f"{folder}/{key}", Body=image_bytes.getvalue())
+    s3.put_object(Bucket=bucket, Key=f"{folder}/{key}", Body=image_bytes.getvalue(), ContentType='image/jpeg')
 
     # Generate the URL for the uploaded image
     image_url = f"https://{bucket}.s3.amazonaws.com/{folder}/{key}"
