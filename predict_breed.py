@@ -41,6 +41,7 @@ app.add_middleware(
 )
 
 '''강아지 종 분류 관련 코드'''
+# 예전 모델로 일단 올려놓음. 
 breed_model = torch.load('resnet50_fintuned_epoch50_v1.pt', map_location=torch.device('cpu'))
 
 '''강아지의 색상 추출해주는 함수 코드'''
@@ -48,7 +49,7 @@ breed_model = torch.load('resnet50_fintuned_epoch50_v1.pt', map_location=torch.d
 '''강아지 face detection'''
 ear_model = torch.load('ear_resnet50.pth', map_location=torch.device('cpu'))
 fur_model = torch.load('fur_resnet50.pth', map_location=torch.device('cpu'))
-dot_model = torch.load('dot_resnet50.pth', map_location=torch.device('cpu'))
+dot_model = torch.load('dot_revised_data_v1.pth', map_location=torch.device('cpu'))
 
 # detection model로 부터 얻은 index 값으로부터 동일한 파일명을 S3로부터 불러온다. 
 # 그러기 위해 각 detection feature의 종류를 배열에 저장해놓는다. 
@@ -658,9 +659,10 @@ async def makeIcon_URL(file: UploadFile = File(...)):
             for color, count in sorted_colors:
                 colors.append(','.join(map(str, color)))
 
-        return colors[:2]
+        return colors, colors[:2] # colors 출력 지우면 됨
 
-    colorArray = defineColor(img_np)
+    test, colorArray = defineColor(img_np) # test, 지우면 됨
+    print(test)
     texts = [colorArray[0] + "-" + ear_type[ear_preds.item()], colorArray[0] + "-" + fur_type[fur_preds.item()], colorArray[1] + "-" + pattern_type[pattern_preds.item()], "dog-face"]
 
     # image를 S3버킷으로부터 불러오는 함수
