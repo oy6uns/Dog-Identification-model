@@ -593,6 +593,8 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     print(test)
     texts = [colorArray[0] + "-" + ear_type[ear_preds.item()], colorArray[0] + "-" + fur_type[fur_preds.item()], colorArray[1] + "-" + pattern_type[pattern_preds.item()], "dog-face"]
 
+    face_bg_arr = ['0,0,0-fur.png', '0,0,0-no_fur.png']
+
     # image를 S3버킷으로부터 불러오는 함수
     def generate_images():
         images = []
@@ -611,7 +613,26 @@ async def makeIcon_URL(file: UploadFile = File(...)):
                 # raise HTTPException(status_code=404, detail=f"No image found for text: {text}")
         return images
     
+        # image를 S3버킷으로부터 불러오는 함수
+    def generate_bg_images():
+        images = []
+        # request body의 배열의 원소와 파일명이 동일한 이미지를 S3버킷으로부터 불러온다. 
+        for text in face_bg_arr:
+            try:
+                response = s3.get_object(Bucket='dog-icon-component-bucket', Key=f'{text}.png')
+                image_data = response['Body'].read()
+                # byte형태를 image형으로 변환해준다. 
+                image = Image.open(io.BytesIO(image_data))
+                images.append(image)
+            # 찾고자 하는 이미지가 S3버킷에 존재하지 않을 때, 에러메시지 출력
+            except s3.exceptions.NoSuchKey:
+                image = Image.new('RGBA', (600, 600), (0, 0, 0, 0))
+                images.append(image)
+                # raise HTTPException(status_code=404, detail=f"No image found for text: {text}")
+        return images
+    
     images = generate_images()
+    face_bgs = generate_bg_images()
 
     # 실제로 불러온 이미지 개수와 request body에서 전달한 텍스트의 개수가 다를 때 에러메시지 출력
     if len(images) < len(texts):
@@ -623,8 +644,13 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     # images 배열의 각 이미지를 순서대로 새로운 배열에 저장해준다. 
     ear_image = images[0]
     fur_image = images[1]
+    if fur_preds.item() == 0:
+        # face_bgs[0] = face_bgs[0].resize((500, 500))
+        face_bgs[0] = face_bgs[0].resize((510, 510))
     if fur_preds.item() == 1:
         fur_image = fur_image.resize((300, 300))
+        # face_bgs[1] = face_bgs[1].resize((304, 304))
+        face_bgs[1] = face_bgs[1].resize((314, 314))
     pattern_image = images[2]
     face_image = images[3]
 
@@ -639,7 +665,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
         if(ear_preds == 0):
             ear_y1 = 160
         else:
-            ear_y1 = 80
+            ear_y1 = 100
         ear_y2 = ear_y1 + ear_image.size[1]
 
         area = (ear_x1, ear_y1, ear_x2, ear_y2)
@@ -649,12 +675,12 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     def make_pattern_position(pattern_preds, pattern_image, background_image):
         print(pattern_preds)
         if pattern_preds == 1:
-            pattern_image = pattern_image.resize((250, 150))
+            # pattern_image = pattern_image.resize((250, 150))
             x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
             print(x1)
             x2 = pattern_image.size[0] + x1
             print(x2)
-            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) - 30
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) - 60
             print(y1)
             y2 = pattern_image.size[1] + y1
             print(y2)
@@ -667,7 +693,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
         elif pattern_preds == 3:
             x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
             x2 = pattern_image.size[0] + x1
-            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) + 55
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) + 50
             y2 = pattern_image.size[1] + y1
         elif pattern_preds == 4:
             pattern_image = pattern_image.resize((305, 195))
@@ -699,6 +725,15 @@ async def makeIcon_URL(file: UploadFile = File(...)):
         x2 = x1 + face_image.size[0]
         y1 = 270
         y2 = y1 + face_image.size[1]
+
+        area = (x1, y1, x2, y2)
+        return area
+    
+    def make_face_background_position(face_background_image, background_image):
+        x1 = int((background_image.size[0] - face_background_image.size[0]) / 2)
+        x2 = x1 + face_background_image.size[0]
+        y1 = int((background_image.size[1] - face_background_image.size[1]) / 2)
+        y2 = y1 + face_background_image.size[1]
 
         area = (x1, y1, x2, y2)
         return area
@@ -734,20 +769,37 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     print(area_pattern)
     area_fur = make_fur_position(fur_image, background_image)
     area_face = make_face_position(face_image, background_image)
+    if fur_preds == 0 :
+        # face_bgs[0] = face_bgs[0].resize((500, 500))
+        face_bgs[0] = face_bgs[0].resize((510, 510))
+        area_face_bg = make_face_background_position(face_bgs[0], background_image)
+        face_bg_image = face_bgs[0]
+    if fur_preds == 1:
+        # face_bgs[1] = face_bgs[1].resize((304, 304))
+        face_bgs[1] = face_bgs[1].resize((314, 314))
+        area_face_bg = make_face_background_position(face_bgs[1], background_image)
+        face_bg_image = face_bgs[1]
 
-    # 배경에 이미지를 겹쳐서 붙이기
+
+    # 배경에 얼굴 배경 먼저 붙이기
+    background_image.paste(face_bg_image, area_face_bg, mask=face_bg_image)
+
+    background_image.paste(ear_image, area_ear, mask=ear_image)
+
+    # 얼굴 이미지를 이어서 붙이기 
     background_image.paste(fur_image, area_fur, mask=fur_image)
     if pattern_preds.item() != 0:
-        if pattern_preds == 1:
-            pattern_image = pattern_image.resize((250, 150))
-        elif pattern_preds == 2:
+        # if pattern_preds == 1:
+        #     pattern_image = pattern_image.resize((250, 150))
+        if pattern_preds == 2:
             pattern_image = pattern_image.resize((250, 220))
         elif pattern_preds == 4:
             pattern_image = pattern_image.resize((305, 195))
         background_image.paste(pattern_image, area_pattern, mask=pattern_image)
 
-    background_image.paste(ear_image, area_ear, mask=ear_image)
+   
     background_image.paste(face_image, area_face, mask=face_image)
+    
 
     image_bytes = io.BytesIO()
     background_image.save(image_bytes, format='PNG')
