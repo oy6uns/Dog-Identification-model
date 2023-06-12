@@ -42,7 +42,7 @@ app.add_middleware(
 
 '''강아지 종 분류 관련 코드'''
 # 예전 모델로 일단 올려놓음. 
-breed_model = torch.load('resnet50_fintuned_epoch50_v1.pt', map_location=torch.device('cpu'))
+breed_model = torch.load('selected_breed_epoch100.pth', map_location=torch.device('cpu'))
 
 '''강아지의 색상 추출해주는 함수 코드'''
 
@@ -57,10 +57,15 @@ ear_type = ['down', 'up']
 fur_type = ['fur', 'no_fur']
 pattern_type = ['no', 'ear_dot', 'many', 'nose', 'pattern3']
 
+# 새로운 모델의 개 품종
+selected_classes = ['beagle','labrador_retriever','golden_retriever','french_bulldog','german_shepherd',
+                    'toy_poodle','rottweiler','yorkshire_terrier','siberian_husky','shih-tzu','doberman',
+                   'maltese_dog','border_collie','chihuahua','pomeranian','italian_greyhound','boxer',
+                    'standard_schnauzer']
 
 # need to get the ids from the sample_submission csv so we can match it up 
 labels = dict()
-for index, value in enumerate(pd.read_csv('dog-breed-identification/sample_submission.csv').columns[1:]):
+for index, value in enumerate(selected_classes):
     labels[value] = index
 print(labels)
 
