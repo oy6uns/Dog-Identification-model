@@ -544,23 +544,23 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     detector = dlib.cnn_face_detection_model_v1('dogHeadDetector.dat')
     img_np = np.array(img)
 
+    def getNearest50(num):
+        # 주어진 숫자를 가장 가까운 50의 배수로 반올림
+        return round((num + 25) // 50) * 50
+
     def defineColor(img_np):
-        
-        # yuv_img = cv2.cvtColor(img_np, cv2.COLOR_BGR2YUV)
-        # yuv_img[:,:,0] = cv2.equalizeHist(yuv_img[:,:,0])
-        # img_output = cv2.cvtColor(yuv_img, cv2.COLOR_YUV2BGR)
+
         dets = detector(img_np, upsample_num_times=1)
 
-        colors = []
         for i, d in enumerate(dets):
             # 얼굴 영역 추출
             x1, y1 = d.rect.left(), d.rect.top()
             x2, y2 = d.rect.right(), d.rect.bottom()
 
-            face_img = img_np[y1:y2, x1:x2]
+            face_img = img_np[y1+15:y2-15, x1+15:x2-15]
 
             # RGB로 변환
-            face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+            # face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
 
             # 이미지를 2차원 배열로 변경
             pixels = face_img.reshape(-1, 3)
@@ -569,31 +569,28 @@ async def makeIcon_URL(file: UploadFile = File(...)):
             kmeans = KMeans(n_clusters=5)
             kmeans.fit(pixels)
 
-            # 중심점의 RGB 값
-            RGB_colors = kmeans.cluster_centers_
+            numLabels = np.arange(0, len(np.unique(kmeans.labels_)) + 1)
+            (hist, _) = np.histogram(kmeans.labels_, bins=numLabels)
+            hist = hist.astype("float")
+            hist /= hist.sum()
 
-            # RGB 값을 정수로 변환
-            RGB_colors = RGB_colors.round(0).astype(int)
+            # 각 색상 블록의 크기와 해당 색상을 사전에 저장
+            dictionary = {}
+            for (percent, color) in zip(hist, kmeans.cluster_centers_):
+                block = percent * 300
+                dictionary[block] = color.astype("uint8").tolist()
 
-            # RGB 값을 50 단위로 정규화
-            for i in range(len(RGB_colors)):
-                RGB_colors[i] = ((RGB_colors[i] + 25) // 50) * 50
+            # 사전을 빈도수에 따라 정렬하고 가장 빈번한 두 가지 색상을 선택
+            sorted_dict = sorted(dictionary.items(), reverse=True)
+            top_two_colors = [','.join(map(str, [getNearest50(value) for value in color])) for block, color in sorted_dict[:2]]
 
-            # 각 dominant color의 비율 계산
-            labels, counts = np.unique(kmeans.labels_, return_counts=True)
-            sorted_colors = sorted(zip(RGB_colors, counts), key=lambda x: x[1], reverse=True)
-            
-            # , 단위로 출력
-            for color, count in sorted_colors:
-                colors.append(','.join(map(str, color)))
+            return top_two_colors
 
-        return colors, colors[:2] # colors 출력 지우면 됨
-
-    test, colorArray = defineColor(img_np) # test, 지우면 됨
-    print(test)
+    colorArray = defineColor(img_np) # test, 지우면 됨
+    print(colorArray)
     texts = [colorArray[0] + "-" + ear_type[ear_preds.item()], colorArray[0] + "-" + fur_type[fur_preds.item()], colorArray[1] + "-" + pattern_type[pattern_preds.item()], "dog-face"]
 
-    face_bg_arr = ['0,0,0-fur.png', '0,0,0-no_fur.png']
+    face_bg_arr = ['0,0,0-fur', '0,0,0-no_fur']
 
     # image를 S3버킷으로부터 불러오는 함수
     def generate_images():
@@ -650,7 +647,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     if fur_preds.item() == 1:
         fur_image = fur_image.resize((300, 300))
         # face_bgs[1] = face_bgs[1].resize((304, 304))
-        face_bgs[1] = face_bgs[1].resize((314, 314))
+        face_bgs[1] = face_bgs[1].resize((310, 310))
     pattern_image = images[2]
     face_image = images[3]
 
@@ -776,7 +773,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
         face_bg_image = face_bgs[0]
     if fur_preds == 1:
         # face_bgs[1] = face_bgs[1].resize((304, 304))
-        face_bgs[1] = face_bgs[1].resize((314, 314))
+        face_bgs[1] = face_bgs[1].resize((310, 310))
         area_face_bg = make_face_background_position(face_bgs[1], background_image)
         face_bg_image = face_bgs[1]
 
