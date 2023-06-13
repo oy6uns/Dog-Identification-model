@@ -588,7 +588,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
 
     colorArray = defineColor(img_np) # test, 지우면 됨
     print(colorArray)
-    texts = [colorArray[0] + "-" + ear_type[ear_preds.item()], colorArray[0] + "-" + fur_type[fur_preds.item()], colorArray[1] + "-" + pattern_type[pattern_preds.item()], "dog-face"]
+    texts = [colorArray[0] + "-" + ear_type[ear_preds.item()], colorArray[0] + "-" + fur_type[fur_preds.item()], colorArray[1] + "-" + pattern_type[pattern_preds.item()], "dog-face", colorArray[0] + "_body"]
 
     face_bg_arr = ['0,0,0-fur', '0,0,0-no_fur']
 
@@ -643,13 +643,14 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     fur_image = images[1]
     if fur_preds.item() == 0:
         # face_bgs[0] = face_bgs[0].resize((500, 500))
-        face_bgs[0] = face_bgs[0].resize((510, 510))
+        face_bgs[0] = face_bgs[0].resize((505, 505))
     if fur_preds.item() == 1:
         fur_image = fur_image.resize((300, 300))
         # face_bgs[1] = face_bgs[1].resize((304, 304))
-        face_bgs[1] = face_bgs[1].resize((310, 310))
+        face_bgs[1] = face_bgs[1].resize((305, 305))
     pattern_image = images[2]
     face_image = images[3]
+    body_image = images[4]
 
     # ear_type = ['down', 'up']
     # fur_type = ['fur', 'no_fur']
@@ -662,7 +663,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
         if(ear_preds == 0):
             ear_y1 = 160
         else:
-            ear_y1 = 100
+            ear_y1 = 120
         ear_y2 = ear_y1 + ear_image.size[1]
 
         area = (ear_x1, ear_y1, ear_x2, ear_y2)
@@ -672,7 +673,7 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     def make_pattern_position(pattern_preds, pattern_image, background_image):
         print(pattern_preds)
         if pattern_preds == 1:
-            # pattern_image = pattern_image.resize((250, 150))
+            pattern_image = pattern_image.resize((305, 160))
             x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
             print(x1)
             x2 = pattern_image.size[0] + x1
@@ -693,10 +694,10 @@ async def makeIcon_URL(file: UploadFile = File(...)):
             y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) + 50
             y2 = pattern_image.size[1] + y1
         elif pattern_preds == 4:
-            pattern_image = pattern_image.resize((305, 195))
+            pattern_image = pattern_image.resize((300, 190))
             x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
             x2 = pattern_image.size[0] + x1
-            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) - 60
+            y1 = int((background_image.size[1] - pattern_image.size[1]) / 2) - 55
             y2 = pattern_image.size[1] + y1
         else:
             x1 = int((background_image.size[0] - pattern_image.size[0]) / 2)
@@ -768,12 +769,12 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     area_face = make_face_position(face_image, background_image)
     if fur_preds == 0 :
         # face_bgs[0] = face_bgs[0].resize((500, 500))
-        face_bgs[0] = face_bgs[0].resize((510, 510))
+        face_bgs[0] = face_bgs[0].resize((505, 505))
         area_face_bg = make_face_background_position(face_bgs[0], background_image)
         face_bg_image = face_bgs[0]
     if fur_preds == 1:
         # face_bgs[1] = face_bgs[1].resize((304, 304))
-        face_bgs[1] = face_bgs[1].resize((310, 310))
+        face_bgs[1] = face_bgs[1].resize((305, 305))
         area_face_bg = make_face_background_position(face_bgs[1], background_image)
         face_bg_image = face_bgs[1]
 
@@ -786,20 +787,39 @@ async def makeIcon_URL(file: UploadFile = File(...)):
     # 얼굴 이미지를 이어서 붙이기 
     background_image.paste(fur_image, area_fur, mask=fur_image)
     if pattern_preds.item() != 0:
-        # if pattern_preds == 1:
-        #     pattern_image = pattern_image.resize((250, 150))
+        if pattern_preds == 1:
+            pattern_image = pattern_image.resize((305, 160))
         if pattern_preds == 2:
             pattern_image = pattern_image.resize((250, 220))
         elif pattern_preds == 4:
-            pattern_image = pattern_image.resize((305, 195))
+            pattern_image = pattern_image.resize((300, 190))
         background_image.paste(pattern_image, area_pattern, mask=pattern_image)
 
-   
     background_image.paste(face_image, area_face, mask=face_image)
+
+    # body를 붙이기 위해 새로운 background를 하나 만들어준다. 
+    final_background_image = Image.new('RGBA', (600, 800), (0, 0, 0, 0))
+
+    def make_body_position(body_image, background_image):
+        body_image = body_image.resize((239, 275))
+        x1 = int((background_image.size[0] - body_image.size[0]) / 2)
+        x2 = x1 + body_image.size[0]
+        y1 = 350
+        y2 = y1 + body_image.size[1]
+
+        area = (x1, y1, x2, y2)
+        return area
+
+    make_color_transparent(body_image, (255, 255, 255))
     
+    area_body = make_body_position(body_image, final_background_image)
+    body_image = body_image.resize((239, 275))
+
+    final_background_image.paste(body_image, area_body, mask=body_image)
+    final_background_image.paste(background_image, (0, 0, 600, 600), mask=background_image)
 
     image_bytes = io.BytesIO()
-    background_image.save(image_bytes, format='PNG')
+    final_background_image.save(image_bytes, format='PNG')
     image_bytes.seek(0)
 
     # S3에 업로드 할 이미지 이름 생성함수
